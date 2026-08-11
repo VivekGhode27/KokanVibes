@@ -101,6 +101,16 @@
     flex-shrink:0;
     border:1px solid rgba(255,255,255,0.25);
     box-shadow:0 6px 16px rgba(0,0,0,0.35);
+    position:relative;
+    overflow:hidden;
+  }
+
+  #yt-player{
+    width:100% !important;
+    height:100% !important;
+    position:absolute;
+    top:0; left:0;
+    pointer-events:none;
   }
 
   .meta{flex:1; min-width:0;}
@@ -254,44 +264,169 @@
 
     <div class="player">
       <div class="track-row">
-        <div class="art"></div>
+        <div class="art" id="art"><div id="yt-player"></div></div>
         <div class="meta">
-          <div class="title">Baarish Ke Baad</div>
-          <div class="artist">Ghats &amp; Ghumaav</div>
+          <div class="title" id="trackTitle">Baarish Ke Baad</div>
+          <div class="artist" id="trackArtist">Ghats &amp; Ghumaav</div>
         </div>
         <div class="badge">Live</div>
       </div>
 
       <div class="progress-wrap">
-        <div class="progress-track">
-          <div class="progress-fill"></div>
+        <div class="progress-track" id="progressTrack">
+          <div class="progress-fill" id="progressFill"></div>
         </div>
         <div class="time-row">
-          <span>1:24</span>
-          <span>4:02</span>
+          <span id="curTime">0:00</span>
+          <span id="durTime">0:00</span>
         </div>
       </div>
 
       <div class="controls">
-        <button class="ctrl-btn secondary" aria-label="Previous">
+        <button class="ctrl-btn secondary" id="prevBtn" aria-label="Previous">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
         </button>
-        <button class="play-btn" aria-label="Play">
+        <button class="play-btn" id="playBtn" aria-label="Play">
           <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
         </button>
-        <button class="ctrl-btn secondary" aria-label="Next">
+        <button class="ctrl-btn secondary" id="nextBtn" aria-label="Next">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zm-9.5 6L15 6v12z"/></svg>
         </button>
       </div>
 
       <div class="volume-row">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-.77-3.29-2-4.24v8.48c1.23-.95 2-2.47 2-4.24zM14.5 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-        <div class="volume-track">
-          <div class="volume-fill"></div>
+        <div class="volume-track" id="volTrack">
+          <div class="volume-fill" id="volFill"></div>
         </div>
-        <div class="volume-pct">62%</div>
+        <div class="volume-pct" id="volPct">62%</div>
       </div>
     </div>
   </div>
+
+<script>
+  var ytPlayer;
+  var isPlaying = false;
+  var progressInterval;
+  var PLAY_PATH = 'M8 5v14l11-7z';
+  var PAUSE_PATH = 'M6 5h4v14H6zM14 5h4v14h-4z';
+
+  function onYouTubeIframeAPIReady(){
+    ytPlayer = new YT.Player('yt-player', {
+      width: '100%',
+      height: '100%',
+      playerVars: {
+        listType: 'playlist',
+        list: 'PLN_pFG_Bv6D4-gpRS06J2auY87DQaEDuo',
+        autoplay: 0,
+        controls: 0,
+        disablekb: 1,
+        modestbranding: 1,
+        rel: 0,
+        playsinline: 1
+      },
+      events: {
+        onReady: onPlayerReady,
+        onStateChange: onPlayerStateChange
+      }
+    });
+  }
+
+  function onPlayerReady(){
+    updateVolumeUI(ytPlayer.getVolume());
+  }
+
+  function onPlayerStateChange(e){
+    if (e.data === YT.PlayerState.PLAYING){
+      isPlaying = true;
+      setPlayIcon(true);
+      updateNowPlaying();
+      startProgressLoop();
+    } else if (e.data === YT.PlayerState.PAUSED){
+      isPlaying = false;
+      setPlayIcon(false);
+      stopProgressLoop();
+    } else if (e.data === YT.PlayerState.CUED){
+      updateNowPlaying();
+    } else if (e.data === YT.PlayerState.ENDED){
+      isPlaying = false;
+      setPlayIcon(false);
+      stopProgressLoop();
+    }
+  }
+
+  function updateNowPlaying(){
+    var data = ytPlayer.getVideoData();
+    if (data){
+      document.getElementById('trackTitle').textContent = data.title || 'Kokan Vibes';
+      document.getElementById('trackArtist').textContent = data.author || 'Everest Marathi';
+    }
+    document.getElementById('durTime').textContent = fmtTime(ytPlayer.getDuration());
+  }
+
+  function fmtTime(s){
+    if (!s || isNaN(s)) return '0:00';
+    var m = Math.floor(s / 60);
+    var sec = Math.floor(s % 60);
+    return m + ':' + (sec < 10 ? '0' : '') + sec;
+  }
+
+  function setPlayIcon(playing){
+    var svg = document.querySelector('#playBtn svg');
+    svg.innerHTML = '<path d="' + (playing ? PAUSE_PATH : PLAY_PATH) + '"/>';
+  }
+
+  function startProgressLoop(){
+    stopProgressLoop();
+    progressInterval = setInterval(function(){
+      var cur = ytPlayer.getCurrentTime();
+      var dur = ytPlayer.getDuration();
+      if (dur > 0){
+        document.getElementById('progressFill').style.width = (cur / dur * 100) + '%';
+      }
+      document.getElementById('curTime').textContent = fmtTime(cur);
+      document.getElementById('durTime').textContent = fmtTime(dur);
+    }, 500);
+  }
+
+  function stopProgressLoop(){
+    clearInterval(progressInterval);
+  }
+
+  function updateVolumeUI(vol){
+    document.getElementById('volFill').style.width = vol + '%';
+    document.getElementById('volPct').textContent = Math.round(vol) + '%';
+  }
+
+  document.getElementById('playBtn').addEventListener('click', function(){
+    if (!ytPlayer) return;
+    if (isPlaying){ ytPlayer.pauseVideo(); } else { ytPlayer.playVideo(); }
+  });
+  document.getElementById('nextBtn').addEventListener('click', function(){
+    if (ytPlayer) ytPlayer.nextVideo();
+  });
+  document.getElementById('prevBtn').addEventListener('click', function(){
+    if (ytPlayer) ytPlayer.previousVideo();
+  });
+  document.getElementById('progressTrack').addEventListener('click', function(e){
+    if (!ytPlayer) return;
+    var rect = this.getBoundingClientRect();
+    var pct = (e.clientX - rect.left) / rect.width;
+    var dur = ytPlayer.getDuration();
+    if (dur > 0) ytPlayer.seekTo(pct * dur, true);
+  });
+  document.getElementById('volTrack').addEventListener('click', function(e){
+    if (!ytPlayer) return;
+    var rect = this.getBoundingClientRect();
+    var pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    ytPlayer.setVolume(pct * 100);
+    updateVolumeUI(pct * 100);
+  });
+
+  var ytTag = document.createElement('script');
+  ytTag.src = "https://www.youtube.com/iframe_api";
+  var firstScriptTag = document.getElementsByTagName('script')[0];
+  firstScriptTag.parentNode.insertBefore(ytTag, firstScriptTag);
+</script>
 </body>
 </html>
